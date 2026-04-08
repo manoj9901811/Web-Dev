@@ -1174,3 +1174,19 @@ details:not([open]) .faq-q::after { transform: rotate(0deg); }
     padding: 40px 20px;
   }
 }
+
+/* Tablet */
+@media (max-width: 1024px) {
+  body::before {
+    background-size: 90px;
+    opacity: 0.10;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  body::before {
+    background-size: 70px;
+    opacity: 0.08;
+  }
+}
