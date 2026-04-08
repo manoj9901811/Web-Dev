@@ -1,383 +1,400 @@
 /**
- * Mangalam HDPE Pipes — Main JavaScript
- * Handles: sticky banner, sticky header, image carousel with zoom,
- *          applications slider, process tabs, testimonial auto-scroll,
- *          mobile hamburger menu.
+ * script.js — Lumière Studio
+ *
+ * Sections:
+ *  1. Sticky Header (scroll-triggered, slide-in/out)
+ *  2. Mobile Navigation (hamburger toggle)
+ *  3. Image Carousel (drag + button navigation)
+ *  4. Zoom-on-Hover (lens + preview panel)
+ *  5. Scroll Reveal (IntersectionObserver)
+ *  6. Contact Form (basic validation + feedback)
+ *  7. Smooth Anchor Scroll
+ *  8. Initialisation
  */
 
-/* ============================================================
-   DOM REFERENCES
-   ============================================================ */
-const siteHeader      = document.getElementById('siteHeader');
-const stickyBanner    = document.getElementById('stickyBanner');
-const bannerClose     = document.getElementById('bannerClose');
-const hamburger       = document.getElementById('hamburger');
-const primaryNav      = document.getElementById('primaryNav');
+'use strict';
 
-// Hero carousel
-const carouselStage   = document.getElementById('carouselStage');
-const carouselPrev    = document.getElementById('carouselPrev');
-const carouselNext    = document.getElementById('carouselNext');
-const carouselThumbs  = document.getElementById('carouselThumbs');
+/* ─────────────────────────────────────────────
+   1. STICKY HEADER
+   Shows after scrolling past the first viewport;
+   hides when user scrolls back toward the top.
+───────────────────────────────────────────── */
+function initStickyHeader() {
+  const header     = document.getElementById('stickyHeader');
+  const primaryNav = document.getElementById('primaryNav');
+  if (!header) return;
 
-// Applications slider
-const appsTrack       = document.getElementById('appsTrack');
-const appsPrev        = document.getElementById('appsPrev');
-const appsNext        = document.getElementById('appsNext');
+  let lastScrollY = window.scrollY;
+  let isVisible   = false;
+  let ticking     = false;
+  const THRESHOLD = window.innerHeight;
 
-// Testimonials (auto-scroll via CSS animation — duplicate for seamless loop)
-const testimonialsTrack = document.getElementById('testimonialsTrack');
+  function updateHeader() {
+    const currentY   = window.scrollY;
+    const pastFold   = currentY > THRESHOLD;
+    const scrollingUp = currentY < lastScrollY;
+    const shouldShow = pastFold && (scrollingUp || currentY > THRESHOLD + 200);
 
-/* ============================================================
-   STICKY BANNER & HEADER
-   ============================================================ */
-
-let bannerVisible = false;
-let bannerDismissed = false;
-const BANNER_THRESHOLD = 80; // px scrolled before banner appears
-
-/**
- * Update header position and banner visibility based on scroll position.
- * Banner appears after scrolling past the first fold.
- * Header shifts down to sit below the banner when banner is visible.
- */
-function onScroll() {
-  const scrollY = window.scrollY;
-
-  // Scrolled state (shadow)
-  siteHeader.classList.toggle('scrolled', scrollY > 10);
-
-  // Show banner once user scrolls past threshold (and hasn't dismissed it)
-  if (!bannerDismissed) {
-    if (scrollY > BANNER_THRESHOLD && !bannerVisible) {
-      stickyBanner.classList.add('visible');
-      siteHeader.classList.add('banner-active');
-      bannerVisible = true;
-    } else if (scrollY <= BANNER_THRESHOLD && bannerVisible) {
-      stickyBanner.classList.remove('visible');
-      siteHeader.classList.remove('banner-active');
-      bannerVisible = false;
+    if (shouldShow !== isVisible) {
+      isVisible = shouldShow;
+      header.classList.toggle('is-visible', isVisible);
     }
+
+    // Tint primary nav after 80px of scroll
+    if (primaryNav) {
+      if (currentY > 80) {
+        primaryNav.style.background      = 'rgba(13,13,11,0.85)';
+        primaryNav.style.backdropFilter  = 'blur(12px)';
+      } else {
+        primaryNav.style.background      = 'transparent';
+        primaryNav.style.backdropFilter  = 'none';
+      }
+    }
+
+    lastScrollY = currentY;
+    ticking     = false;
   }
-}
 
-window.addEventListener('scroll', onScroll, { passive: true });
-onScroll(); // run once on page load
-
-/* Dismiss banner */
-bannerClose.addEventListener('click', () => {
-  stickyBanner.classList.remove('visible');
-  siteHeader.classList.remove('banner-active');
-  bannerDismissed = true;
-  bannerVisible = false;
-});
-
-/* ============================================================
-   HAMBURGER / MOBILE MENU
-   ============================================================ */
-hamburger.addEventListener('click', () => {
-  const isOpen = hamburger.classList.toggle('open');
-  hamburger.setAttribute('aria-expanded', String(isOpen));
-  primaryNav.classList.toggle('open', isOpen);
-  // Prevent body scroll when menu is open
-  document.body.style.overflow = isOpen ? 'hidden' : '';
-});
-
-/* Close nav when a link inside it is clicked */
-primaryNav.addEventListener('click', (e) => {
-  if (e.target.tagName === 'A') {
-    hamburger.classList.remove('open');
-    hamburger.setAttribute('aria-expanded', 'false');
-    primaryNav.classList.remove('open');
-    document.body.style.overflow = '';
-  }
-});
-
-/* ============================================================
-   HERO IMAGE CAROUSEL WITH ZOOM
-   ============================================================ */
-const slides = Array.from(carouselStage.querySelectorAll('.carousel-slide'));
-const thumbBtns = Array.from(carouselThumbs.querySelectorAll('.thumb'));
-let currentSlide = 0;
-let autoplayTimer = null;
-
-/**
- * Show a slide by index. Updates aria attributes and thumbnail states.
- * @param {number} idx - Target slide index
- */
-function goToSlide(idx) {
-  const prev = currentSlide;
-
-  // Clamp index
-  currentSlide = ((idx % slides.length) + slides.length) % slides.length;
-
-  // Update slides
-  slides[prev].classList.remove('active');
-  slides[currentSlide].classList.add('active');
-
-  // Update thumbnails
-  thumbBtns[prev].classList.remove('active');
-  thumbBtns[prev].setAttribute('aria-selected', 'false');
-  thumbBtns[currentSlide].classList.add('active');
-  thumbBtns[currentSlide].setAttribute('aria-selected', 'true');
-
-  // Keep active thumb in view
-  thumbBtns[currentSlide].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-}
-
-/** Restart autoplay timer */
-function restartAutoplay() {
-  clearInterval(autoplayTimer);
-  autoplayTimer = setInterval(() => goToSlide(currentSlide + 1), 4500);
-}
-
-// Arrow controls
-carouselPrev.addEventListener('click', () => { goToSlide(currentSlide - 1); restartAutoplay(); });
-carouselNext.addEventListener('click', () => { goToSlide(currentSlide + 1); restartAutoplay(); });
-
-// Thumbnail controls
-thumbBtns.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    goToSlide(parseInt(btn.dataset.slide, 10));
-    restartAutoplay();
-  });
-});
-
-// Keyboard navigation for carousel
-carouselStage.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowLeft')  { goToSlide(currentSlide - 1); restartAutoplay(); }
-  if (e.key === 'ArrowRight') { goToSlide(currentSlide + 1); restartAutoplay(); }
-});
-
-// Touch swipe support
-(function setupSwipe() {
-  let startX = 0;
-  carouselStage.addEventListener('touchstart', (e) => { startX = e.changedTouches[0].clientX; }, { passive: true });
-  carouselStage.addEventListener('touchend', (e) => {
-    const dx = e.changedTouches[0].clientX - startX;
-    if (Math.abs(dx) > 40) {
-      dx < 0 ? goToSlide(currentSlide + 1) : goToSlide(currentSlide - 1);
-      restartAutoplay();
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(updateHeader);
+      ticking = true;
     }
   }, { passive: true });
-})();
+}
 
-// Start autoplay
-restartAutoplay();
+/* ─────────────────────────────────────────────
+   2. MOBILE NAVIGATION
+───────────────────────────────────────────── */
+function initMobileNav() {
+  const hamburger  = document.getElementById('hamburger');
+  const mobileMenu = document.getElementById('mobileMenu');
+  if (!hamburger || !mobileMenu) return;
 
-/* ============================================================
-   ZOOM EFFECT — tracks mouse position within each slide
-   The CSS transforms the zoom-img based on --zoom-x / --zoom-y
-   custom properties set here.
-   ============================================================ */
-slides.forEach((slide) => {
-  slide.addEventListener('mousemove', (e) => {
-    const rect = slide.getBoundingClientRect();
-    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPct = ((e.clientY - rect.top)  / rect.height) * 100;
-    slide.style.setProperty('--zoom-x', `${xPct}%`);
-    slide.style.setProperty('--zoom-y', `${yPct}%`);
-    // Apply transform-origin to zoom image so zoom follows cursor
-    const zoomImg = slide.querySelector('.zoom-img');
-    if (zoomImg) zoomImg.style.transformOrigin = `${xPct}% ${yPct}%`;
-  });
-});
+  function toggleMenu(open) {
+    const isOpen = (open !== undefined) ? open : !hamburger.classList.contains('is-open');
+    hamburger.classList.toggle('is-open', isOpen);
+    hamburger.setAttribute('aria-expanded', String(isOpen));
 
-/* ============================================================
-   APPLICATIONS SLIDER
-   ============================================================ */
-(function setupAppsSlider() {
-  const cardWidth   = 300; // must match CSS .app-card width
-  const cardGap     = 20;
-  const step        = cardWidth + cardGap;
-  let appsOffset    = 0;
-  const totalCards  = appsTrack.querySelectorAll('.app-card').length;
-  const maxOffset   = (totalCards - 1) * step;
-
-  appsNext.addEventListener('click', () => {
-    if (appsOffset < maxOffset) {
-      appsOffset += step;
+    if (isOpen) {
+      mobileMenu.style.display = 'flex';
+      requestAnimationFrame(() => mobileMenu.classList.add('is-open'));
     } else {
-      appsOffset = 0; // loop back
+      mobileMenu.classList.remove('is-open');
+      mobileMenu.addEventListener('transitionend', () => {
+        if (!mobileMenu.classList.contains('is-open')) mobileMenu.style.display = '';
+      }, { once: true });
     }
-    appsTrack.style.transform = `translateX(-${appsOffset}px)`;
+
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+  }
+
+  hamburger.addEventListener('click', () => toggleMenu());
+  mobileMenu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => toggleMenu(false)));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleMenu(false); });
+}
+
+/* ─────────────────────────────────────────────
+   3. IMAGE CAROUSEL
+   Supports: prev/next buttons, touch+mouse drag,
+   dot navigation, keyboard arrows.
+───────────────────────────────────────────── */
+function initCarousel() {
+  const track         = document.getElementById('carouselTrack');
+  const prevBtn       = document.getElementById('carouselPrev');
+  const nextBtn       = document.getElementById('carouselNext');
+  const dotsContainer = document.getElementById('carouselDots');
+  if (!track) return;
+
+  const items        = Array.from(track.querySelectorAll('.carousel__item'));
+  const count        = items.length;
+  let currentIndex   = 0;
+
+  // Build dots
+  items.forEach((_, i) => {
+    const dot = document.createElement('button');
+    dot.className = 'carousel__dot' + (i === 0 ? ' is-active' : '');
+    dot.setAttribute('role', 'tab');
+    dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+    dot.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+    dot.addEventListener('click', () => goTo(i));
+    dotsContainer.appendChild(dot);
   });
 
-  appsPrev.addEventListener('click', () => {
-    if (appsOffset > 0) {
-      appsOffset -= step;
+  const dots = Array.from(dotsContainer.querySelectorAll('.carousel__dot'));
+
+  function getItemWidth() {
+    if (!items[0]) return 0;
+    const gap = parseFloat(window.getComputedStyle(track).gap) || 0;
+    return items[0].offsetWidth + gap;
+  }
+
+  function goTo(index, instant) {
+    currentIndex = Math.max(0, Math.min(index, count - 1));
+    const offset = currentIndex * getItemWidth();
+
+    if (instant) {
+      track.style.transition = 'none';
     } else {
-      appsOffset = maxOffset; // loop to end
+      track.style.transition = '';
     }
-    appsTrack.style.transform = `translateX(-${appsOffset}px)`;
-  });
-})();
+    track.style.transform = 'translateX(-' + offset + 'px)';
 
-/* ============================================================
-   PROCESS TABS
-   ============================================================ */
-(function setupProcessTabs() {
-  const tabBtns   = document.querySelectorAll('.process-tab-btn');
-  const tabPanels = document.querySelectorAll('.process-tab-panel');
-
-  tabBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const target = btn.dataset.tab;
-
-      // Update buttons
-      tabBtns.forEach((b) => {
-        b.classList.remove('active');
-        b.setAttribute('aria-selected', 'false');
-      });
-      btn.classList.add('active');
-      btn.setAttribute('aria-selected', 'true');
-
-      // Update panels
-      tabPanels.forEach((panel) => {
-        panel.classList.remove('active');
-      });
-      const targetPanel = document.querySelector(`[data-panel="${target}"]`);
-      if (targetPanel) targetPanel.classList.add('active');
+    dots.forEach((d, i) => {
+      d.classList.toggle('is-active', i === currentIndex);
+      d.setAttribute('aria-selected', i === currentIndex ? 'true' : 'false');
     });
+
+    if (prevBtn) prevBtn.disabled = currentIndex === 0;
+    if (nextBtn) nextBtn.disabled = currentIndex === count - 1;
+  }
+
+  prevBtn && prevBtn.addEventListener('click', () => goTo(currentIndex - 1));
+  nextBtn && nextBtn.addEventListener('click', () => goTo(currentIndex + 1));
+
+  track.setAttribute('tabindex', '0');
+  track.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft')  goTo(currentIndex - 1);
+    if (e.key === 'ArrowRight') goTo(currentIndex + 1);
   });
-})();
 
-/* ============================================================
-   TESTIMONIALS SEAMLESS AUTO-SCROLL
-   Duplicates cards so the CSS marquee-style animation loops.
-   ============================================================ */
-(function setupTestimonialLoop() {
-  if (!testimonialsTrack) return;
-  // Clone all children for seamless infinite scroll
-  const cards = Array.from(testimonialsTrack.children);
-  cards.forEach((card) => {
-    const clone = card.cloneNode(true);
-    clone.setAttribute('aria-hidden', 'true');
-    testimonialsTrack.appendChild(clone);
-  });
-})();
+  // Drag support
+  let pointerStart = 0;
+  let isDragging   = false;
+  let startOffset  = 0;
 
-/* ============================================================
-   SMOOTH SCROLL for anchor links (polyfill for older browsers)
-   ============================================================ */
-document.querySelectorAll('a[href^="#"]').forEach((link) => {
-  link.addEventListener('click', (e) => {
-    const href = link.getAttribute('href');
+  function onDown(e) {
+    isDragging   = true;
+    pointerStart = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+    startOffset  = currentIndex * getItemWidth();
+    track.style.transition = 'none';
+    track.style.cursor = 'grabbing';
+  }
 
-    // ✅ STOP default jump for "#"
-    if (href === "#") {
-      e.preventDefault();
-      return;
-    }
+  function onMove(e) {
+    if (!isDragging) return;
+    const x     = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+    const delta = pointerStart - x;
+    track.style.transform = 'translateX(-' + (startOffset + delta) + 'px)';
+  }
 
-    const targetId = href.slice(1);
-    const target = document.getElementById(targetId);
+  function onUp(e) {
+    if (!isDragging) return;
+    isDragging = false;
+    track.style.cursor = '';
+    const x     = e.type === 'touchend' ? e.changedTouches[0].clientX : e.clientX;
+    const delta = pointerStart - x;
+    const threshold = getItemWidth() * 0.25;
+    goTo(Math.abs(delta) > threshold ? (delta > 0 ? currentIndex + 1 : currentIndex - 1) : currentIndex);
+  }
 
-    if (!target) return;
+  track.addEventListener('mousedown',  onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup',   onUp);
+  track.addEventListener('touchstart', onDown, { passive: true });
+  track.addEventListener('touchmove',  onMove, { passive: true });
+  track.addEventListener('touchend',   onUp);
+  track.querySelectorAll('img').forEach(img => img.addEventListener('dragstart', e => e.preventDefault()));
 
-    e.preventDefault();
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => goTo(currentIndex, true), 120);
+  }, { passive: true });
 
-    const offsetTop =
-      target.getBoundingClientRect().top +
-      window.scrollY -
-      parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-h'), 10) -
-      16;
+  goTo(0);
+}
 
-    window.scrollTo({
-      top: offsetTop,
-      behavior: 'smooth'
-    });
-  });
-});
-/* ============================================================
-   CATALOGUE FORM — simple validation feedback
-   ============================================================ */
-(function setupCatalogueForm() {
-  const form = document.querySelector('.catalogue-form');
-  if (!form) return;
-  const emailInput = form.querySelector('input[type="email"]');
-  const submitBtn  = form.querySelector('.btn');
+/* ─────────────────────────────────────────────
+   4. ZOOM ON HOVER
+   Tracks cursor with a circular lens overlay and
+   shows a magnified preview popup panel.
+───────────────────────────────────────────── */
+function initZoom() {
+  var ZOOM_FACTOR = 3;
 
-  submitBtn.addEventListener('click', () => {
-    const email = emailInput.value.trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      emailInput.style.borderColor = '#ef4444';
-      emailInput.focus();
-      emailInput.placeholder = 'Please enter a valid email';
-      return;
-    }
-    emailInput.style.borderColor = '';
-    submitBtn.textContent = '✔ Sent!';
-    submitBtn.disabled = true;
-    emailInput.value = '';
-    setTimeout(() => {
-      submitBtn.textContent = 'Request Catalogue';
-      submitBtn.disabled = false;
-    }, 3000);
-  });
-})();
+  document.querySelectorAll('[data-zoom]').forEach(function(wrap) {
+    var img        = wrap.querySelector('img');
+    var lens       = wrap.querySelector('.zoom-lens');
+    var preview    = wrap.querySelector('.zoom-preview');
+    var previewImg = wrap.querySelector('.zoom-preview__img');
+    if (!img || !lens || !preview || !previewImg) return;
 
-/* ============================================================
-   CONTACT FORM — simple validation feedback
-   ============================================================ */
-(function setupContactForm() {
-  const contactBtn = document.querySelector('.btn-dark.btn-full');
-  if (!contactBtn) return;
-  contactBtn.addEventListener('click', () => {
-    const inputs = document.querySelectorAll('.contact-form-box .input-field');
-    let valid = true;
-    inputs.forEach((inp) => {
-      if (!inp.value.trim()) {
-        inp.style.borderColor = '#ef4444';
-        valid = false;
+    wrap.addEventListener('mousemove', function(e) {
+      var rect    = wrap.getBoundingClientRect();
+      var imgRect = img.getBoundingClientRect();
+
+      // Cursor position relative to image
+      var x    = e.clientX - imgRect.left;
+      var y    = e.clientY - imgRect.top;
+      var imgW = imgRect.width;
+      var imgH = imgRect.height;
+
+      // Lens — position relative to wrap
+      var lensX = e.clientX - rect.left;
+      var lensY = e.clientY - rect.top;
+      lens.style.left = lensX + 'px';
+      lens.style.top  = lensY + 'px';
+
+      // Fraction across image
+      var fracX = Math.max(0, Math.min(x / imgW, 1));
+      var fracY = Math.max(0, Math.min(y / imgH, 1));
+
+      // Background position for zoom preview
+      var previewSize = 220;
+      var bgW  = imgW * ZOOM_FACTOR;
+      var bgH  = imgH * ZOOM_FACTOR;
+      var bgPX = fracX * bgW - previewSize / 2;
+      var bgPY = fracY * bgH - previewSize / 2;
+
+      previewImg.style.backgroundSize     = (ZOOM_FACTOR * 100) + '%';
+      previewImg.style.backgroundPosition = '-' + bgPX + 'px -' + bgPY + 'px';
+
+      // Position preview panel
+      var panelW = 220;
+      var rawLeft = lensX - panelW / 2;
+      var clampLeft = Math.max(0, Math.min(rawLeft, rect.width - panelW));
+      preview.style.left      = clampLeft + 'px';
+      preview.style.translate = 'none';
+
+      // Flip below if close to top of viewport
+      if (imgRect.top < 260) {
+        preview.style.top    = 'calc(100% + 16px)';
+        preview.style.bottom = 'auto';
       } else {
-        inp.style.borderColor = '';
+        preview.style.bottom = 'calc(100% + 16px)';
+        preview.style.top    = 'auto';
       }
     });
-    if (valid) {
-      contactBtn.textContent = '✔ Request Sent!';
-      contactBtn.disabled = true;
-      inputs.forEach((inp) => { inp.value = ''; });
-      setTimeout(() => {
-        contactBtn.textContent = 'Request Custom Quote';
-        contactBtn.disabled = false;
-      }, 3000);
-    }
   });
-})();
+}
 
-/* ============================================================
-   INTERSECTION OBSERVER — animate sections on scroll
-   ============================================================ */
-(function setupScrollAnimations() {
-  const style = document.createElement('style');
-  style.textContent = `
-    .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.55s ease, transform 0.55s ease; }
-    .reveal.visible { opacity: 1; transform: translateY(0); }
-    .reveal-delay-1 { transition-delay: 0.1s; }
-    .reveal-delay-2 { transition-delay: 0.2s; }
-    .reveal-delay-3 { transition-delay: 0.3s; }
-    .reveal-delay-4 { transition-delay: 0.4s; }
-    .reveal-delay-5 { transition-delay: 0.5s; }
-  `;
-  document.head.appendChild(style);
+/* ─────────────────────────────────────────────
+   5. SCROLL REVEAL
+───────────────────────────────────────────── */
+function initScrollReveal() {
+  var selectors = [
+    '.section-header',
+    '.work-card',
+    '.about__text',
+    '.about__visual',
+    '.testimonial__inner',
+    '.contact__text',
+    '.contact__form',
+  ];
 
-  // Add reveal classes to target elements
-  const targets = document.querySelectorAll(
-    '.feature-card, .faq-item, .portfolio-card, .app-card, .specs-table, .testimonial-card'
-  );
-  targets.forEach((el, i) => {
-    el.classList.add('reveal', `reveal-delay-${(i % 5) + 1}`);
+  selectors.forEach(function(sel) {
+    document.querySelectorAll(sel).forEach(function(el) {
+      el.classList.add('reveal');
+    });
   });
 
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
+  var statsRow = document.querySelector('.about__stats');
+  if (statsRow) statsRow.classList.add('reveal-group');
+
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
       if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-        observer.unobserve(entry.target); // animate once
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
       }
     });
-  }, { threshold: 0.12 });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
 
-  targets.forEach((el) => observer.observe(el));
-})();
+  document.querySelectorAll('.reveal, .reveal-group').forEach(function(el) {
+    observer.observe(el);
+  });
+}
+
+/* ─────────────────────────────────────────────
+   6. CONTACT FORM
+───────────────────────────────────────────── */
+function initContactForm() {
+  var form = document.querySelector('.contact__form');
+  if (!form) return;
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var btn   = form.querySelector('button[type="submit"]');
+    var name  = (form.querySelector('#name')  || {}).value  || '';
+    var email = (form.querySelector('#email') || {}).value  || '';
+    var msg   = (form.querySelector('#message') || {}).value || '';
+
+    if (!name.trim() || !email.trim() || !msg.trim()) {
+      showFeedback(form, 'Please fill in all fields.', 'error');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      showFeedback(form, 'Please enter a valid email address.', 'error');
+      return;
+    }
+
+    btn.textContent = 'Sending\u2026';
+    btn.disabled    = true;
+
+    setTimeout(function() {
+      showFeedback(form, '\u2713 Message sent! We\u2019ll be in touch soon.', 'success');
+      form.reset();
+      btn.textContent = 'Send Message';
+      btn.disabled    = false;
+    }, 1200);
+  });
+}
+
+function showFeedback(form, message, type) {
+  var fb = form.querySelector('.form-feedback');
+  if (!fb) {
+    fb = document.createElement('p');
+    fb.className = 'form-feedback';
+    fb.style.cssText = [
+      'font-size:0.85rem',
+      'padding:0.75em 1em',
+      'border-radius:2px',
+      'margin-top:0.5rem',
+      'transition:opacity 0.4s',
+    ].join(';');
+    form.appendChild(fb);
+  }
+  fb.textContent = message;
+  fb.style.background = type === 'success' ? 'rgba(100,180,100,0.12)' : 'rgba(200,80,80,0.12)';
+  fb.style.border     = '1px solid ' + (type === 'success' ? 'rgba(100,180,100,0.3)' : 'rgba(200,80,80,0.3)');
+  fb.style.color      = type === 'success' ? '#8ecf8e' : '#cf8e8e';
+  fb.style.opacity    = '1';
+  setTimeout(function() { fb.style.opacity = '0'; }, 5000);
+}
+
+/* ─────────────────────────────────────────────
+   7. SMOOTH ANCHOR SCROLL (with nav offset)
+───────────────────────────────────────────── */
+function initSmoothScroll() {
+  var OFFSET = 72;
+  document.querySelectorAll('a[href^="#"]').forEach(function(link) {
+    link.addEventListener('click', function(e) {
+      var id     = link.getAttribute('href').slice(1);
+      var target = id ? document.getElementById(id) : null;
+      if (!target) return;
+      e.preventDefault();
+      var top = target.getBoundingClientRect().top + window.scrollY - OFFSET;
+      window.scrollTo({ top: top, behavior: 'smooth' });
+    });
+  });
+}
+
+/* ─────────────────────────────────────────────
+   8. INIT
+───────────────────────────────────────────── */
+function init() {
+  initStickyHeader();
+  initMobileNav();
+  initCarousel();
+  initZoom();
+  initScrollReveal();
+  initContactForm();
+  initSmoothScroll();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
