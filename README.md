@@ -27,6 +27,7 @@ Preview
 
 <img width="1887" height="949" alt="image" src="https://github.com/user-attachments/assets/71818b74-2a93-45a0-be83-3cd987a77ce2" />
 
+
 Project Structure
 - index.html
 - styles.css
